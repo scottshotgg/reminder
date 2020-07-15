@@ -2,10 +2,7 @@ package main
 
 import (
 	"log"
-	"time"
 
-	"github.com/scottshotgg/reminder/pkg/reminder/simp"
-	"github.com/scottshotgg/reminder/pkg/sender"
 	"github.com/scottshotgg/reminder/pkg/sender/printer"
 	"github.com/scottshotgg/reminder/pkg/server/rest"
 )
@@ -19,24 +16,23 @@ func main() {
 		log.Fatalln("err:", err)
 	}
 
-	_ = s
 	// send(s)
-	rest.Start()
+	rest.Start(s)
 
 	// time.Sleep(1 * time.Minute)
 }
 
-func send(s sender.Sender) {
-	var stop = time.After(1 * time.Second)
+// func send(s sender.Sender) {
+// 	var stop = time.After(1 * time.Second)
 
-	for range time.NewTicker(100 * time.Millisecond).C {
-		select {
-		case <-stop:
-			return
+// 	for range time.NewTicker(100 * time.Millisecond).C {
+// 		select {
+// 		case <-stop:
+// 			return
 
-		default:
-			log.Println("Sending")
-			s.Send(simp.New("yo fker do ur things"))
-		}
-	}
-}
+// 		default:
+// 			log.Println("Sending")
+// 			s.Send(simp.New("yo fker do ur things"))
+// 		}
+// 	}
+// }
