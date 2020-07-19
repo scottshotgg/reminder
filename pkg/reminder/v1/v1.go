@@ -11,27 +11,25 @@ import (
 
 type V1 struct {
 	ID      string
-	Created int64
-	Until   time.Duration
 	Message string
-	Fired   bool
-	Queued  bool
 	To      string
+	Created int64
+	Moment  int64
+	Status  reminder.MsgStatus
 }
 
 func FromDB(r *types.DBReminder) *V1 {
 	return &V1{
 		ID:      r.ID,
-		Created: r.Created,
-		Until:   r.Until,
 		Message: r.Message,
-		Fired:   r.Fired,
-		Queued:  r.Queued,
 		To:      r.To,
+		Moment:  r.Moment,
+		Created: r.Created,
+		Status:  r.Status,
 	}
 }
 
-func New(created int64, until time.Duration, message, to string) (reminder.Reminder, error) {
+func New(created, moment int64, message, to string) (reminder.Reminder, error) {
 	var id, err = uuid.NewUUID()
 	if err != nil {
 		log.Fatalln("err:", err)
@@ -40,31 +38,15 @@ func New(created int64, until time.Duration, message, to string) (reminder.Remin
 
 	return &V1{
 		ID:      id.String(),
-		Created: created,
-		Until:   until,
 		Message: message,
+		Created: created,
+		Moment:  moment,
 		To:      to,
 	}, nil
 }
 
 func (v *V1) GetID() string {
 	return v.ID
-}
-
-func (v *V1) GetCreated() int64 {
-	return v.Created
-}
-
-func (v *V1) GetUntil() time.Duration {
-	return v.Until
-}
-
-func (v *V1) IsAfter(t time.Duration) bool {
-	if v.Until < t {
-		return true
-	}
-
-	return false
 }
 
 func (v *V1) GetMessage() string {
@@ -75,16 +57,46 @@ func (v *V1) GetTo() string {
 	return v.To
 }
 
-func (v *V1) GetQueued() bool {
-	return v.Queued
+func (v *V1) GetCreated() int64 {
+	return v.Created
 }
 
-func (v *V1) GetFired() bool {
-	return v.Fired
+func (v *V1) GetMoment() int64 {
+	return v.Moment
+}
+
+func (v *V1) GetStatus() reminder.MsgStatus {
+	return v.Status
+}
+
+func (v *V1) IsReady() bool {
+	return v.Status == reminder.Ready
+}
+
+func (v *V1) IsQueued() bool {
+	return v.Status == reminder.Queued
+}
+
+func (v *V1) IsFired() bool {
+	return v.Status == reminder.Fired
 }
 
 func (v *V1) SetQueued(q bool) {
-	v.Queued = q
+	v.Status = reminder.Queued
+}
+
+func (v *V1) CalcTTL() time.Duration {
+	return time.Duration(v.Moment-time.Now().Unix()) * time.Second
+}
+
+func (v *V1) IsAfter(t time.Duration) bool {
+	var ttl = time.Duration(v.Moment - time.Now().Unix())
+
+	if ttl > 0 && ttl < t {
+		return true
+	}
+
+	return false
 }
 
 // func (v V1) MarshalBinary() ([]byte, error) {

@@ -74,7 +74,7 @@ func (s *Redis) CreateReminder(r *types.DBReminder) error {
 		log.Fatalln("err:", err)
 	}
 
-	_, err = s.client.Set(r.ID, blob, r.Until).Result()
+	_, err = s.client.Set(r.ID, blob, time.Duration(r.Moment-time.Now().Unix())).Result()
 
 	return err
 }

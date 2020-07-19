@@ -41,9 +41,7 @@ func (s *Mem) GetTTL(key string) (time.Duration, error) {
 		return 0, err
 	}
 
-	var finalTime = time.Unix(r.Created, 0).Add(r.Until)
-
-	return time.Now().Sub(finalTime), nil
+	return time.Duration(r.Moment - time.Now().Unix()), nil
 }
 
 func (s *Mem) CreateReminder(r *types.DBReminder) error {

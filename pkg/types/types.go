@@ -1,18 +1,15 @@
 package types
 
 import (
-	"time"
-
 	"github.com/scottshotgg/reminder/pkg/reminder"
 )
 
 type DBReminder struct {
 	ID      string
 	Created int64
-	Until   time.Duration
+	Moment  int64
 	Message string
-	Queued  bool
-	Fired   bool
+	Status  reminder.MsgStatus
 	To      string
 }
 
@@ -20,16 +17,9 @@ func ToDB(r reminder.Reminder) *DBReminder {
 	return &DBReminder{
 		ID:      r.GetID(),
 		Created: r.GetCreated(),
-		Until:   r.GetUntil(),
+		Moment:  r.GetMoment(),
 		Message: r.GetMessage(),
-		Queued:  r.GetQueued(),
-		Fired:   r.GetFired(),
+		Status:  r.GetStatus(),
 		To:      r.GetTo(),
 	}
-}
-
-type internalV1 struct {
-	ID      string
-	Created int64
-	Until   time.Duration
 }
