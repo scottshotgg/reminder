@@ -3,6 +3,8 @@ version: '3'
 services:
   reminder:
     build: .
+    env_file:
+      - ./.compose-env
     ports: 
       - "8080:8080"
       - "5001:5001"

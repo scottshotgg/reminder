@@ -16,7 +16,7 @@ func New() (sender.Sender, error) {
 
 // Send is implemented very simply using time.AfterFunc
 func (p *Printer) Send(r reminder.Reminder) error {
-	log.Println("MESSAGE:", r.Message())
+	log.Println("MESSAGE:", r.GetMessage())
 
 	return nil
 }

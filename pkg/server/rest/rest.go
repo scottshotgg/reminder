@@ -5,22 +5,22 @@ import (
 	"log"
 	"time"
 
-	"github.com/go-redis/redis"
 	"github.com/gofiber/fiber"
-	"github.com/google/uuid"
-	"github.com/kelindar/binary"
 	"github.com/scottshotgg/reminder/pkg/reminder"
 	v1 "github.com/scottshotgg/reminder/pkg/reminder/v1"
 	"github.com/scottshotgg/reminder/pkg/sender"
+	"github.com/scottshotgg/reminder/pkg/storage"
+	redis_storage "github.com/scottshotgg/reminder/pkg/storage/redis"
+	"github.com/scottshotgg/reminder/pkg/types"
 )
 
 type Server struct {
-	s  sender.Sender
-	r  *redis.Client
-	ch chan string
+	s       sender.Sender
+	storage storage.Storage
+	ch      chan string
 }
 
-func Start(s sender.Sender) {
+func Start(redisURL string, s sender.Sender) error {
 	var app = fiber.New()
 
 	var srv = &Server{
@@ -28,12 +28,12 @@ func Start(s sender.Sender) {
 		ch: make(chan string, 1000),
 	}
 
-	// TODO: options
-	srv.r = redis.NewClient(&redis.Options{
-		Addr:     "redis:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
+	var store, err = redis_storage.New(redisURL)
+	if err != nil {
+		return err
+	}
+
+	srv.storage = store
 
 	go srv.crawl()
 	var amount = 10
@@ -46,7 +46,7 @@ func Start(s sender.Sender) {
 	app.Get("/reminders", srv.getReminder)
 	app.Post("/reminders", srv.createReminder)
 
-	app.Listen(8080)
+	return app.Listen(8080)
 }
 
 /*
@@ -54,11 +54,9 @@ func Start(s sender.Sender) {
  - Loop through the keys
  - Set time.AfterFunc for each one under 5 minutes
 */
-func (s *Server) process(key string) {
-	fmt.Println("Got key:", key)
-
+func (s *Server) process(key string) error {
 	// Grab the TTL of the given key
-	ttl, err := s.r.TTL(key).Result()
+	ttl, err := s.storage.GetTTL(key)
 	if err != nil {
 		log.Fatalln("err:", err)
 	}
@@ -66,20 +64,14 @@ func (s *Server) process(key string) {
 	// If TTL is over 5 minutes, ignore it for now
 	if ttl > 5*time.Minute {
 		fmt.Println("Skipping ...")
-		return
+		return nil
 	}
 
 	// Get the key
-	contents, err := s.r.Get(key).Bytes()
+	r, err := s.storage.GetReminder(key)
 	if err != nil {
 		log.Fatalln("err:", err)
-	}
-
-	// Unmarshal the contents from the binary payload
-	var r v1.V1
-	err = binary.Unmarshal(contents, &r)
-	if err != nil {
-		log.Fatalln("err:", err)
+		return err
 	}
 
 	fmt.Println("reminder:", r)
@@ -88,25 +80,30 @@ func (s *Server) process(key string) {
 	// TODO: put this in another Redis hash set or w/e
 	if r.Queued {
 		fmt.Println("Already queued")
-		return
+		return nil
 	}
 
 	fmt.Println("Setting reminder ...")
+
 	// Set a timer to fire the send
-	s.after(ttl, &r, key)
+	s.remind(ttl, v1.FromDB(r))
+
+	return nil
 }
 
-func (s *Server) after(ttl time.Duration, r reminder.Reminder, key string) {
+// TODO: calculating the TTL needs to be more calculated, current time, etc
+func (s *Server) remind(ttl time.Duration, r reminder.Reminder) {
 	time.AfterFunc(ttl, func() {
 		var err = s.s.Send(r)
+
 		if err != nil {
 			// TODO: need to do something here
 			log.Fatalln("err:", err)
 		}
 
+		// TODO: we can probably optimize this by batching them
 		// Delete the key after we are done with it
-		// TODO: see if Redis will do this automatically when we are done with it
-		_, err = s.r.Del(key).Result()
+		err = s.storage.DeleteKey(r.GetID())
 		if err != nil {
 			log.Fatalln("err:", err)
 		}
@@ -114,16 +111,26 @@ func (s *Server) after(ttl time.Duration, r reminder.Reminder, key string) {
 }
 
 func (s *Server) worker() {
+	var err error
+
 	for key := range s.ch {
-		s.process(key)
+		err = s.process(key)
+		if err != nil {
+			// TODO: do something here
+
+			log.Fatalln("err:", err)
+		}
 	}
 }
 
 func (s *Server) crawl() {
 	for range time.NewTicker(1 * time.Minute).C {
-		var keys, err = s.r.Keys("*").Result()
+		var keys, err = s.storage.ListReminders()
 		if err != nil {
 			log.Fatalln("err:", err)
+
+			// TODO: need to do something to decode the error and act
+			continue
 		}
 
 		for _, key := range keys {
@@ -136,67 +143,42 @@ func (s *Server) getReminder(c *fiber.Ctx) {
 	c.Send("Hello, World 👋!")
 }
 
-type (
-	V1 struct {
-		id      uuid.UUID
-		Created int64
-		After   int64
-		Msg     string
-		To      string
-	}
-)
-
 func (s *Server) createReminder(c *fiber.Ctx) {
-	// var randomNum = rand.Intn(6)
-	// var randy = "reminder" + strconv.Itoa(randomNum)
+	var (
+		rem V1
+		err = c.BodyParser(&rem)
+	)
 
-	// var blob, err = json.Marshal(simp.New(randy))
-	// if err != nil {
-	// 	log.Fatalln("err:", err)
-	// }
-
-	// var cmd = s.r.Set(randy, blob, time.Duration(randomNum)*time.Minute)
-	// if cmd.Err() != nil {
-	// 	log.Fatalln("err:", cmd.Err().Error())
-	// }
-
-	var rem V1
-	var err = c.BodyParser(&rem)
 	if err != nil {
+		// TODO: return something
 		log.Fatalln("err:", err)
 	}
-
-	var now = time.Now()
 
 	if rem.Created == 0 {
-		rem.Created = now.Unix()
-	}
-
-	rem.id, err = uuid.NewUUID()
-	if err != nil {
-		log.Fatalln("err:", err)
+		rem.Created = time.Now().Unix()
 	}
 
 	fmt.Println("rem:", rem)
 
-	var v1Rem = v1.V1{
-		Created: rem.Created,
-		After:   time.Duration(rem.After) * time.Second,
-		Msg:     rem.Msg,
-		To:      rem.To,
-	}
+	var after = time.Duration(rem.After) * time.Second
 
-	// If its going to fire in less than 5 minutes then instantly queue it up
-	if v1Rem.After < 5*time.Minute {
-		v1Rem.Queued = true
-
-		s.after(v1Rem.After, &v1Rem, rem.id.String())
-	}
-	// If not then insert it into Redis
-	blob, err := binary.Marshal(v1Rem)
+	r, err := v1.New(rem.Created, after, rem.Message, rem.To)
 	if err != nil {
+		// TODO: return something
 		log.Fatalln("err:", err)
 	}
 
-	fmt.Println(s.r.Set(rem.id.String(), blob, v1Rem.After).Result())
+	// If its going to fire in less than 5 minutes then instantly queue it up
+	if after < 5*time.Minute {
+		r.SetQueued(true)
+
+		// Start the reminder
+		s.remind(after, r)
+	}
+
+	err = s.storage.CreateReminder(types.ToDB(r))
+	if err != nil {
+		// TODO: return something
+		log.Fatalln("err:", err)
+	}
 }
