@@ -9,6 +9,13 @@ import (
 	"github.com/scottshotgg/reminder/pkg/sender/printer"
 	"github.com/scottshotgg/reminder/pkg/sender/sms/twilio"
 	"github.com/scottshotgg/reminder/pkg/server/rest"
+
+	// redis_storage "github.com/scottshotgg/reminder/pkg/storage/redis"
+	mem_storage "github.com/scottshotgg/reminder/pkg/storage/mem"
+)
+
+const (
+	workerAmount = 10
 )
 
 func main() {
@@ -21,8 +28,8 @@ func main() {
 	// }
 
 	var (
-		s   sender.Sender
-		err error
+		sender sender.Sender
+		err    error
 	)
 
 	// Utilities
@@ -36,6 +43,10 @@ func main() {
 
 	// Redis
 	var redisURLFlag = flag.String("redis-url", "localhost:6379", "")
+
+	// TODO: make a flag for storage
+	// Storage
+	// var redisURLFlag = flag.String("redis-url", "localhost:6379", "")
 	// _, err = net.ParseIP(*redisURLFlag)
 	// if err != nil {
 	// 	log.Fatalln("You must provide the `redis-url` flag")
@@ -57,10 +68,10 @@ func main() {
 			log.Fatalln("You must provide the `token` flag")
 		}
 
-		s, err = twilio.New(*fromFlag, *sidFlag, *tokenFlag)
+		sender, err = twilio.New(*fromFlag, *sidFlag, *tokenFlag)
 
 	case "printer":
-		s, err = printer.New()
+		sender, err = printer.New()
 
 	case "":
 		err = errors.New("no `smsProvider` specified")
@@ -73,7 +84,16 @@ func main() {
 		log.Fatalln("err:", err)
 	}
 
-	err = rest.Start(*redisURLFlag, s)
+	// store, err := redis_storage.New(*redisURLFlag)
+	// if err != nil {
+	// 	log.Fatalln("err:", err)
+	// }
+
+	_ = *redisURLFlag
+
+	var store = mem_storage.New(nil)
+
+	err = rest.Start(workerAmount, store, sender)
 	if err != nil {
 		log.Fatalln("err:", err)
 	}

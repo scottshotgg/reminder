@@ -6,45 +6,52 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber"
+	"github.com/google/uuid"
 	"github.com/scottshotgg/reminder/pkg/reminder"
 	v1 "github.com/scottshotgg/reminder/pkg/reminder/v1"
 	"github.com/scottshotgg/reminder/pkg/sender"
 	"github.com/scottshotgg/reminder/pkg/storage"
-	redis_storage "github.com/scottshotgg/reminder/pkg/storage/redis"
 	"github.com/scottshotgg/reminder/pkg/types"
 )
 
-type Server struct {
-	s       sender.Sender
-	storage storage.Storage
-	ch      chan string
+const (
+	reminderIDParam = "reminderID"
+)
+
+type params struct {
+	reminderID string
 }
 
-func Start(redisURL string, s sender.Sender) error {
-	var app = fiber.New()
+type Server struct {
+	sender  sender.Sender
+	storage storage.Storage
+	ch      chan string
+	params  *params
+}
 
-	var srv = &Server{
-		s:  s,
-		ch: make(chan string, 1000),
-	}
+func Start(workerAmount int, st storage.Storage, se sender.Sender) error {
+	var (
+		app = fiber.New()
 
-	var store, err = redis_storage.New(redisURL)
-	if err != nil {
-		return err
-	}
+		s = &Server{
+			storage: st,
+			sender:  se,
+			ch:      make(chan string, 1000),
+			params: &params{
+				reminderID: reminderIDParam,
+			},
+		}
+	)
 
-	srv.storage = store
-
-	go srv.crawl()
-	var amount = 10
+	go s.crawl()
 
 	// Start the workers
-	for i := 0; i < amount; i++ {
-		go srv.worker()
+	for i := 0; i < workerAmount; i++ {
+		go s.worker()
 	}
 
-	app.Get("/reminders", srv.getReminder)
-	app.Post("/reminders", srv.createReminder)
+	app.Get("/reminders/:"+s.params.reminderID, s.getReminder)
+	app.Post("/reminders", s.createReminder)
 
 	return app.Listen(8080)
 }
@@ -74,16 +81,12 @@ func (s *Server) process(key string) error {
 		return err
 	}
 
-	fmt.Println("reminder:", r)
-
 	// If its already been queued then skip it
 	// TODO: put this in another Redis hash set or w/e
 	if r.Queued {
 		fmt.Println("Already queued")
 		return nil
 	}
-
-	fmt.Println("Setting reminder ...")
 
 	// Set a timer to fire the send
 	s.remind(ttl, v1.FromDB(r))
@@ -94,7 +97,7 @@ func (s *Server) process(key string) error {
 // TODO: calculating the TTL needs to be more calculated, current time, etc
 func (s *Server) remind(ttl time.Duration, r reminder.Reminder) {
 	time.AfterFunc(ttl, func() {
-		var err = s.s.Send(r)
+		var err = s.sender.Send(r)
 
 		if err != nil {
 			// TODO: need to do something here
@@ -140,7 +143,27 @@ func (s *Server) crawl() {
 }
 
 func (s *Server) getReminder(c *fiber.Ctx) {
-	c.Send("Hello, World 👋!")
+	var id = c.Params(s.params.reminderID)
+
+	var _, err = uuid.Parse(id)
+	if err != nil {
+		err = c.JSON(NewError("invalid reminder ID", err.Error()))
+		if err != nil {
+			c.Send(`{"error": %s}`, err.Error())
+		}
+
+		return
+	}
+
+	r, err := s.storage.GetReminder(id)
+	if err != nil {
+		log.Fatalln("err:", err)
+	}
+
+	err = c.JSON(r)
+	if err != nil {
+		log.Fatalln("err:", err)
+	}
 }
 
 func (s *Server) createReminder(c *fiber.Ctx) {
@@ -179,6 +202,12 @@ func (s *Server) createReminder(c *fiber.Ctx) {
 	err = s.storage.CreateReminder(types.ToDB(r))
 	if err != nil {
 		// TODO: return something
+		log.Fatalln("err:", err)
+	}
+
+	err = c.JSON(r)
+	if err != nil {
+		// TODO: handle this
 		log.Fatalln("err:", err)
 	}
 }
