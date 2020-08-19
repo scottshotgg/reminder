@@ -7,7 +7,6 @@ import (
 
 	"github.com/gofiber/fiber"
 	"github.com/scottshotgg/reminder/pkg/reminder"
-	v1 "github.com/scottshotgg/reminder/pkg/reminder/v1"
 	"github.com/scottshotgg/reminder/pkg/types"
 )
 
@@ -80,11 +79,7 @@ func (s *Server) createReminderAt(c *fiber.Ctx) {
 
 	fmt.Println("rem:", rem)
 
-	r, err := v1.New(rem.Created, rem.Moment, rem.Message, rem.To)
-	if err != nil {
-		// TODO: return something
-		log.Fatalln("err:", err)
-	}
+	var r = reminder.New(rem.Created, rem.Moment, rem.Message, rem.To)
 
 	err = s.checkAndSet(c, r)
 	if err != nil {
@@ -110,11 +105,7 @@ func (s *Server) createReminderAfter(c *fiber.Ctx) {
 
 	fmt.Println("rem:", rem)
 
-	r, err := v1.New(rem.Created, time.Now().Unix()+rem.After, rem.Message, rem.To)
-	if err != nil {
-		// TODO: return something
-		log.Fatalln("err:", err)
-	}
+	var r = reminder.New(rem.Created, time.Now().Unix()+rem.After, rem.Message, rem.To)
 
 	err = s.checkAndSet(c, r)
 	if err != nil {
@@ -137,11 +128,10 @@ func (s *Server) updateReminderAt(c *fiber.Ctx) {
 
 	}
 
-	var r = v1.FromDB(rdb)
-
-	r.ID = id
-
-	var rem CreateAtV1Req
+	var (
+		r   = dbToAPIReminder(rdb)
+		rem CreateAtV1Req
+	)
 
 	err = c.BodyParser(&rem)
 	if err != nil {
@@ -182,7 +172,7 @@ func (s *Server) updateReminderAfter(c *fiber.Ctx) {
 		log.Fatalln("err:", err)
 	}
 
-	var r = v1.FromDB(rdb)
+	var r = dbToAPIReminder(rdb)
 
 	r.ID = id
 
@@ -228,10 +218,10 @@ func (s *Server) deleteReminder(c *fiber.Ctx) {
 	}
 }
 
-func (s *Server) checkAndSet(c *fiber.Ctx, r reminder.Reminder) error {
+func (s *Server) checkAndSet(c *fiber.Ctx, r *reminder.Reminder) error {
 	// If its going to fire in less than 5 minutes then instantly queue it up
 	if r.IsAfter(5 * time.Minute) {
-		r.SetQueued(true)
+		r.Status = reminder.Queued
 
 		// Start the reminder
 		s.remind(r)

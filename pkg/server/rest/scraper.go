@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/scottshotgg/reminder/pkg/reminder"
-	v1 "github.com/scottshotgg/reminder/pkg/reminder/v1"
 )
 
 // TODO: make this an interface in its own package so we can test different scraping algorithms
@@ -78,9 +77,9 @@ func (s *Server) process(key string) error {
 	// If its already been queued then skip it
 	// TODO: put this in another Redis hash set or w/e
 	switch r.Status {
-	case reminder.Ready:
+	case reminder.Created:
 		// Set a timer to fire the send
-		s.remind(v1.FromDB(r))
+		s.remind(dbToAPIReminder(r))
 
 	case
 		reminder.Queued,

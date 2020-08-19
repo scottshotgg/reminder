@@ -26,7 +26,7 @@ func New(f string, sid, token string) (sender.Sender, error) {
 	}, nil
 }
 
-func (s *TwilioSMS) Send(r reminder.Reminder) error {
-	var _, err = s.client.Messages.SendMessage(s.from, r.GetTo(), r.GetMessage(), nil)
+func (s *TwilioSMS) Send(r *reminder.Reminder) error {
+	var _, err = s.client.Messages.SendMessage(s.from, r.To, r.Message, nil)
 	return err
 }

@@ -4,22 +4,26 @@ import (
 	"github.com/scottshotgg/reminder/pkg/reminder"
 )
 
-type DBReminder struct {
-	ID      string
-	Created int64
-	Moment  int64
-	Message string
-	Status  reminder.MsgStatus
-	To      string
-}
+// DBReminder is used for the persistence layer
+type (
+	DBReminder struct {
+		ID      string
+		Created int64
+		Moment  int64
+		Message string
+		Status  reminder.MsgStatus
+		To      string
+	}
+)
 
-func ToDB(r reminder.Reminder) *DBReminder {
+// ToDB maps an API reminder to a DB reminder
+func ToDB(r *reminder.Reminder) *DBReminder {
 	return &DBReminder{
-		ID:      r.GetID(),
-		Created: r.GetCreated(),
-		Moment:  r.GetMoment(),
-		Message: r.GetMessage(),
-		Status:  r.GetStatus(),
-		To:      r.GetTo(),
+		ID:      r.ID,
+		Created: r.Created,
+		Moment:  r.Moment,
+		Message: r.Message,
+		Status:  r.Status,
+		To:      r.To,
 	}
 }

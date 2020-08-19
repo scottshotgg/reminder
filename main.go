@@ -30,19 +30,19 @@ func main() {
 	var (
 		sender sender.Sender
 		err    error
+
+		// Utilities
+		smsProviderFlag = flag.String("sms-provider", "printer", "Use this to set twilio as the default text provider")
+
+		// TODO: fill in usage
+		// Twilio
+		fromFlag  = flag.String("from", "", "")
+		sidFlag   = flag.String("sid", "", "")
+		tokenFlag = flag.String("token", "", "")
+
+		// Redis
+		redisURLFlag = flag.String("redis-url", "localhost:6379", "")
 	)
-
-	// Utilities
-	var smsProviderFlag = flag.String("sms-provider", "printer", "Use this to set twilio as the default text provider")
-
-	// TODO: fill in usage
-	// Twilio
-	var fromFlag = flag.String("from", "", "")
-	var sidFlag = flag.String("sid", "", "")
-	var tokenFlag = flag.String("token", "", "")
-
-	// Redis
-	var redisURLFlag = flag.String("redis-url", "localhost:6379", "")
 
 	// TODO: make a flag for storage
 	// Storage

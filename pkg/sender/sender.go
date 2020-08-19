@@ -5,5 +5,5 @@ import (
 )
 
 type Sender interface {
-	Send(r reminder.Reminder) error
+	Send(r *reminder.Reminder) error
 }

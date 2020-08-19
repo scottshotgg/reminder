@@ -6,6 +6,7 @@ type (
 		Created int64  `json:"created"`
 		Message string `json:"message"`
 		To      string `json:"to"`
+		WarnAt  []int  `json:"warnAt"`
 	}
 
 	ListV1Res struct {

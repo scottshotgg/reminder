@@ -1,15 +1,15 @@
-version: '3'
+version: "3"
 
 services:
   reminder:
     build: .
     env_file:
       - ./.compose-env
-    ports: 
-      - "8080:8080"
-      - "5001:5001"
+    ports:
+      - 8080:8080
+      - 5001:5001
 
   redis:
     image: redis:6.0.5-alpine3.12
     ports:
-      - "6379:6379"
+      - 6379:6379
